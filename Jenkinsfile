@@ -5,6 +5,7 @@ pipeline {
         stage('Build') {
             steps {
                 script {
+                    // Build the Docker image
                     sh 'docker build -t my-html-app .'
                 }
             }
@@ -13,21 +14,24 @@ pipeline {
         stage('Test') {
             steps {
                 script {
-                    // Stop and remove any existing container on port 8081
+                    // Cleanup any existing container with the same name or port
                     sh '''
+                    docker ps -q --filter "name=my-html-container" | xargs -r docker stop
+                    docker ps -a -q --filter "name=my-html-container" | xargs -r docker rm
                     docker ps -q --filter "publish=8081" | xargs -r docker stop
                     docker ps -a -q --filter "publish=8081" | xargs -r docker rm
                     '''
 
-                    // Start the container
+                    // Run the container
                     sh 'docker run -d -p 8081:80 --name my-html-container my-html-app'
 
-                    // Wait for the container to start
+                    // Wait for the container to initialize
                     sh 'sleep 5'
 
-                    // Get the bridge network IP for the container
+                    // Check if the container responds
                     sh '''
                     container_ip=$(docker inspect -f "{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}" my-html-container)
+                    echo "Container IP: $container_ip"
                     response=$(curl -o /dev/null -s -w "%{http_code}" http://$container_ip:80)
                     echo "Response code: $response"
                     if [ "$response" != "200" ]; then
@@ -42,7 +46,8 @@ pipeline {
         stage('Security Scan') {
             steps {
                 script {
-                    sh 'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image my-html-app'
+                    // Run Trivy for security scanning
+                    sh 'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image my-html-app'
                 }
             }
         }
@@ -50,14 +55,31 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    // Clean up the old container if it exists
-                    sh 'docker ps -q --filter "name=my-html-container" | xargs -r docker stop'
-                    sh 'docker ps -a -q --filter "name=my-html-container" | xargs -r docker rm'
-
-                    // Run the container for deployment
-                    sh 'docker run -d -p 8081:80 --name my-html-container my-html-app'
+                    // Deploy the container if needed
+                    sh '''
+                    docker-compose down
+                    docker-compose up -d
+                    '''
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Cleanup after the pipeline
+                sh '''
+                docker ps -q --filter "name=my-html-container" | xargs -r docker stop
+                docker ps -a -q --filter "name=my-html-container" | xargs -r docker rm
+                '''
+            }
+        }
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed. Check the logs for details.'
         }
     }
 }
