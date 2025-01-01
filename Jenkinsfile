@@ -11,26 +11,21 @@ pipeline {
         stage('Test') {
             steps {
                 script {
-                    // Dynamically find a free port
-                    def freePort = sh(script: """
-                        seq 8000 9000 | while read port; do
-                            ss -tln | grep -q ":\\$port" || { echo \\$port; break; }
-                        done
-                    """, returnStdout: true).trim()
+                    // Clean up any existing containers using port 8081
+                    sh """
+                        docker ps -q --filter "publish=8081" | xargs -r docker stop
+                        docker ps -a -q --filter "publish=8081" | xargs -r docker rm
+                    """
 
-                    if (!freePort) {
-                        error "No free ports found in the range 8000-9000"
-                    }
-
-                    // Run the container on the free port
-                    def containerId = sh(script: "docker run -d -p ${freePort}:80 my-app-image", returnStdout: true).trim()
+                    // Run the container on port 8081
+                    def containerId = sh(script: "docker run -d -p 8081:80 my-app-image", returnStdout: true).trim()
 
                     try {
                         // Allow the container some time to initialize
                         sh "sleep 5"
 
                         // Check if the site is up by verifying HTTP status code
-                        def statusCode = sh(script: "curl -o /dev/null -s -w '%{http_code}' http://localhost:${freePort}", returnStdout: true).trim()
+                        def statusCode = sh(script: "curl -o /dev/null -s -w '%{http_code}' http://localhost:8081", returnStdout: true).trim()
                         if (statusCode != '200') {
                             error "Site did not return HTTP 200. Got: ${statusCode}"
                         }
@@ -52,8 +47,12 @@ pipeline {
         }
         stage('Deploy') {
             steps {
-                sh "docker-compose down || true" // Stop any existing deployment
-                sh "docker-compose up -d"      // Start the new deployment
+                script {
+                    // Ensure clean slate
+                    sh "docker-compose down || true"
+                    // Deploy the application
+                    sh "docker-compose up -d"
+                }
             }
         }
     }
