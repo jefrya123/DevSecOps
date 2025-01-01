@@ -25,9 +25,11 @@ pipeline {
                     // Wait for the container to start
                     sh 'sleep 5'
 
-                    // Test the page
+                    // Get the bridge network IP for the container
                     sh '''
-                    response=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8081)
+                    container_ip=$(docker inspect -f "{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}" my-html-container)
+                    response=$(curl -o /dev/null -s -w "%{http_code}" http://$container_ip:80)
+                    echo "Response code: $response"
                     if [ "$response" != "200" ]; then
                         echo "Test failed: HTTP response code $response"
                         exit 1
