@@ -1,0 +1,6 @@
+version: '3.8'
+services:
+  my-app:
+    image: my-app-image
+    ports:
+      - "8081:80" # Map container port 80 to host port 8081
