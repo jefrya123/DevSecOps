@@ -11,7 +11,7 @@ pipeline {
         stage('Test') {
             steps {
                 script {
-                    def containerId = sh(script: "docker run -d -p 8080:80 my-app-image", returnStdout: true).trim()
+                    def containerId = sh(script: "docker run -d -p 8081:80 my-app-image", returnStdout: true).trim()
                     try {
                         sh "sleep 5" // Allow the container to start
                         sh "curl -s http://localhost:8080 | grep 'Welcome to the DevSecOps Pipeline'"
