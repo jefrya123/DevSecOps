@@ -11,8 +11,11 @@ pipeline {
         stage('Test') {
             steps {
                 script {
-                    // Run the container
-                    def containerId = sh(script: "docker run -d -p 8081:80 my-app-image", returnStdout: true).trim()
+                    // Dynamically find a free port
+                    def freePort = sh(script: "comm -23 <(seq 8000 9000) <(ss -tln | awk '{print \$4}' | grep -oE '[0-9]+\$' | sort -n | uniq)", returnStdout: true).trim().split('\n')[0]
+
+                    // Run the container on the free port
+                    def containerId = sh(script: "docker run -d -p ${freePort}:80 my-app-image", returnStdout: true).trim()
 
                     try {
                         // Allow the container some time to initialize
@@ -20,7 +23,7 @@ pipeline {
 
                         // Check if the site is up by verifying HTTP status code
                         sh """
-                        status_code=\$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8081)
+                        status_code=\$(curl -o /dev/null -s -w "%{http_code}" http://localhost:${freePort})
                         if [ "\$status_code" -ne 200 ]; then
                             echo "Error: Unexpected status code \$status_code"
                             exit 1
@@ -30,7 +33,7 @@ pipeline {
 
                         // Optionally, check for non-empty content
                         sh """
-                        content=\$(curl -s http://localhost:8081)
+                        content=\$(curl -s http://localhost:${freePort})
                         if [ -z "\$content" ]; then
                             echo "Error: Site response is empty"
                             exit 1
