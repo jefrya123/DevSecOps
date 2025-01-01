@@ -24,7 +24,8 @@ pipeline {
         }
         stage('Security Scan') {
             steps {
-                echo 'Scanning for vulnerabilities...'
+                script {
+                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image my-app-image"
             }
         }
         stage('Deploy') {
