@@ -30,7 +30,7 @@ pipeline {
                         // Retry the curl command to check if the service is up
                         def statusCode = sh(script: """
                             for i in {1..5}; do
-                                status=$(curl -o /dev/null -s -w '%{http_code}' http://localhost:8081)
+                                status=\$(curl -o /dev/null -s -w '%{http_code}' http://localhost:8081)
                                 if [ "\$status" -eq 200 ]; then
                                     echo \$status
                                     exit 0
