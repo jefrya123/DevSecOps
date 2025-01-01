@@ -13,8 +13,8 @@ pipeline {
                 script {
                     // Clean up any existing containers using port 8081
                     sh """
-                        docker ps -q --filter "publish=8081" | xargs -r docker stop
-                        docker ps -a -q --filter "publish=8081" | xargs -r docker rm
+                        docker ps -q --filter publish=8081 | xargs -r docker stop
+                        docker ps -a -q --filter publish=8081 | xargs -r docker rm
                     """
 
                     // Run the container on port 8081
@@ -24,21 +24,17 @@ pipeline {
                         // Allow the container some time to initialize
                         sh "sleep 10"
 
-                        // Inspect container logs for debugging
-                        sh "docker logs ${containerId}"
+                        // Get the Docker bridge IP address
+                        def dockerBridgeIp = sh(script: "ip route | grep docker0 | awk '{print \$9}'", returnStdout: true).trim()
 
-                        // Retry the curl command to check if the service is up
+                        // Check the service response
                         def statusCode = sh(script: """
-                            for i in {1..5}; do
-                                status=\$(curl -o /dev/null -s -w '%{http_code}' http://localhost:8081)
-                                if [ "\$status" -eq 200 ]; then
-                                    echo \$status
-                                    exit 0
-                                fi
-                                sleep 2
-                            done
-                            exit 1
+                            curl -o /dev/null -s -w "%{http_code}" http://${dockerBridgeIp}:8081
                         """, returnStdout: true).trim()
+
+                        if (statusCode != "200") {
+                            error "Service responded with HTTP status: ${statusCode}"
+                        }
 
                         echo "Service responded with HTTP status: ${statusCode}"
                     } finally {
