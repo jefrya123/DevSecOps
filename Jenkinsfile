@@ -1,63 +1,59 @@
 pipeline {
     agent any
+
     stages {
         stage('Build') {
             steps {
                 script {
-                    docker.build('my-app-image')
+                    sh 'docker build -t my-html-app .'
                 }
             }
         }
+
         stage('Test') {
             steps {
                 script {
-                    // Clean up any existing containers using port 8081
-                    sh """
-                        docker ps -q --filter publish=8081 | xargs -r docker stop
-                        docker ps -a -q --filter publish=8081 | xargs -r docker rm
-                    """
+                    // Stop and remove any existing container on port 8081
+                    sh '''
+                    docker ps -q --filter "publish=8081" | xargs -r docker stop
+                    docker ps -a -q --filter "publish=8081" | xargs -r docker rm
+                    '''
 
-                    // Run the container on port 8081
-                    def containerId = sh(script: "docker run -d -p 8081:80 my-app-image", returnStdout: true).trim()
+                    // Start the container
+                    sh 'docker run -d -p 8081:80 --name my-html-container my-html-app'
 
-                    try {
-                        // Allow the container some time to initialize
-                        sh "sleep 10"
+                    // Wait for the container to start
+                    sh 'sleep 5'
 
-                        // Get the Docker bridge IP address
-                        def dockerBridgeIp = sh(script: "ip route | grep docker0 | awk '{print \$9}'", returnStdout: true).trim()
-
-                        // Check the service response
-                        def statusCode = sh(script: """
-                            curl -o /dev/null -s -w "%{http_code}" http://${dockerBridgeIp}:8081
-                        """, returnStdout: true).trim()
-
-                        if (statusCode != "200") {
-                            error "Service responded with HTTP status: ${statusCode}"
-                        }
-
-                        echo "Service responded with HTTP status: ${statusCode}"
-                    } finally {
-                        // Stop the container
-                        sh "docker stop ${containerId}"
-                    }
+                    // Test the page
+                    sh '''
+                    response=$(curl -o /dev/null -s -w "%{http_code}" http://localhost:8081)
+                    if [ "$response" != "200" ]; then
+                        echo "Test failed: HTTP response code $response"
+                        exit 1
+                    fi
+                    '''
                 }
             }
         }
+
         stage('Security Scan') {
             steps {
                 script {
-                    sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image my-app-image"
+                    sh 'docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image my-html-app'
                 }
             }
         }
+
         stage('Deploy') {
             steps {
                 script {
-                    // Ensure clean slate
-                    sh "docker-compose down || true"
-                    // Deploy the application
-                    sh "docker-compose up -d"
+                    // Clean up the old container if it exists
+                    sh 'docker ps -q --filter "name=my-html-container" | xargs -r docker stop'
+                    sh 'docker ps -a -q --filter "name=my-html-container" | xargs -r docker rm'
+
+                    // Run the container for deployment
+                    sh 'docker run -d -p 8081:80 --name my-html-container my-html-app'
                 }
             }
         }
