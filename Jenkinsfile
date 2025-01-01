@@ -22,15 +22,25 @@ pipeline {
 
                     try {
                         // Allow the container some time to initialize
-                        sh "sleep 5"
+                        sh "sleep 10"
 
-                        // Check if the site is up by verifying HTTP status code
-                        def statusCode = sh(script: "curl -o /dev/null -s -w '%{http_code}' http://localhost:8081", returnStdout: true).trim()
-                        if (statusCode != '200') {
-                            error "Site did not return HTTP 200. Got: ${statusCode}"
-                        }
+                        // Inspect container logs for debugging
+                        sh "docker logs ${containerId}"
 
-                        echo "Site is up and responded with HTTP 200"
+                        // Retry the curl command to check if the service is up
+                        def statusCode = sh(script: """
+                            for i in {1..5}; do
+                                status=$(curl -o /dev/null -s -w '%{http_code}' http://localhost:8081)
+                                if [ "\$status" -eq 200 ]; then
+                                    echo \$status
+                                    exit 0
+                                fi
+                                sleep 2
+                            done
+                            exit 1
+                        """, returnStdout: true).trim()
+
+                        echo "Service responded with HTTP status: ${statusCode}"
                     } finally {
                         // Stop the container
                         sh "docker stop ${containerId}"
