@@ -31,7 +31,8 @@ pipeline {
     }
         stage('Deploy') {
             steps {
-                echo 'Deploying application...'
+                sh "docker-compose down || true" // Stop any existing deployment
+                sh "docker-compose up -d"      // Start the new deployment
             }
         }
     }
