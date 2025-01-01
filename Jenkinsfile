@@ -12,7 +12,7 @@ pipeline {
             steps {
                 script {
                     // Dynamically find a free port
-                    def freePort = sh(script: "comm -23 <(seq 8000 9000) <(ss -tln | awk '{print \$4}' | grep -oE '[0-9]+\$' | sort -n | uniq)", returnStdout: true).trim().split('\n')[0]
+                    def freePort = sh(script: "bash -c 'comm -23 <(seq 8000 9000) <(ss -tln | awk \\\"{print \\\$4}\\\" | grep -oE \\\"[0-9]+\\\$\\\" | sort -n | uniq)'", returnStdout: true).trim().split('\n')[0]
 
                     // Run the container on the free port
                     def containerId = sh(script: "docker run -d -p ${freePort}:80 my-app-image", returnStdout: true).trim()
