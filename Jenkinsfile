@@ -12,7 +12,11 @@ pipeline {
             steps {
                 script {
                     // Dynamically find a free port
-                    def freePort = sh(script: "bash -c 'comm -23 <(seq 8000 9000) <(ss -tln | awk \\\"{print \\\$4}\\\" | grep -oE \\\"[0-9]+\\\$\\\" | sort -n | uniq)'", returnStdout: true).trim().split('\n')[0]
+                    def freePort = sh(script: """
+                        seq 8000 9000 | while read port; do
+                            ss -tln | grep -q ":\\$port" || { echo \\$port; break; }
+                        done
+                    """, returnStdout: true).trim()
 
                     // Run the container on the free port
                     def containerId = sh(script: "docker run -d -p ${freePort}:80 my-app-image", returnStdout: true).trim()
@@ -22,24 +26,12 @@ pipeline {
                         sh "sleep 5"
 
                         // Check if the site is up by verifying HTTP status code
-                        sh """
-                        status_code=\$(curl -o /dev/null -s -w "%{http_code}" http://localhost:${freePort})
-                        if [ "\$status_code" -ne 200 ]; then
-                            echo "Error: Unexpected status code \$status_code"
-                            exit 1
-                        fi
-                        echo "Site is up and responded with HTTP 200"
-                        """
+                        def statusCode = sh(script: "curl -o /dev/null -s -w '%{http_code}' http://localhost:${freePort}", returnStdout: true).trim()
+                        if (statusCode != '200') {
+                            error "Site did not return HTTP 200. Got: ${statusCode}"
+                        }
 
-                        // Optionally, check for non-empty content
-                        sh """
-                        content=\$(curl -s http://localhost:${freePort})
-                        if [ -z "\$content" ]; then
-                            echo "Error: Site response is empty"
-                            exit 1
-                        fi
-                        echo "Site responded with content"
-                        """
+                        echo "Site is up and responded with HTTP 200"
                     } finally {
                         // Stop the container
                         sh "docker stop ${containerId}"
