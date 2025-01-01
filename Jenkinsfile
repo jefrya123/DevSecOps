@@ -28,6 +28,7 @@ pipeline {
                     sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image my-app-image"
             }
         }
+    }
         stage('Deploy') {
             steps {
                 echo 'Deploying application...'
