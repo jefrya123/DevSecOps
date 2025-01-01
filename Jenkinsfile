@@ -18,6 +18,10 @@ pipeline {
                         done
                     """, returnStdout: true).trim()
 
+                    if (!freePort) {
+                        error "No free ports found in the range 8000-9000"
+                    }
+
                     // Run the container on the free port
                     def containerId = sh(script: "docker run -d -p ${freePort}:80 my-app-image", returnStdout: true).trim()
 
